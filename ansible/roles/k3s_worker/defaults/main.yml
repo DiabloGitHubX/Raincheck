@@ -1,0 +1,6 @@
+---
+# Must match the K3s server version
+k3s_version: "v1.29.5+k3s1"
+
+# Worker agent configuration
+k3s_agent_service_name: k3s-agent

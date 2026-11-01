@@ -1,0 +1,47 @@
+---
+- name: Check if K3s server is already installed
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s --version
+  register: k3s_server_version
+  failed_when: false
+  changed_when: false
+
+- name: Install or upgrade K3s server
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION={{ k3s_version }} \
+      sh -s - server \
+        {{ k3s_disable_components | map('regex_replace', '^', '--disable ') | join(' ') }} \
+        --write-kubeconfig-mode {{ k3s_write_kubeconfig_mode }} \
+        --tls-san {{ ansible_host }}
+  when: >
+    k3s_server_version.rc != 0 or
+    k3s_version not in k3s_server_version.stdout
+
+- name: Wait for K3s API to accept connections
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 6443
+    timeout: "{{ k3s_api_wait_timeout }}"
+
+- name: Wait for at least one node to become Ready
+  ansible.builtin.command:
+    cmd: /usr/local/bin/k3s kubectl get nodes --no-headers
+  register: k3s_ready
+  until: "' Ready' in k3s_ready.stdout"
+  retries: "{{ k3s_node_ready_retries }}"
+  delay: "{{ k3s_node_ready_delay }}"
+  changed_when: false
+
+- name: Read K3s node join token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_raw
+
+- name: Set K3s token fact
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+
+- name: Display master installation status
+  ansible.builtin.debug:
+    msg: "K3s {{ k3s_version }} master is ready."

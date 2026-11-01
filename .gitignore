@@ -1,6 +1,6 @@
 
 # Terraform
-**/.terraform/*
+**/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
@@ -30,6 +30,7 @@ venv/
 !.env.example
 *.pem
 *.key
+*.pub
 id_rsa
 id_ed25519
 
@@ -41,3 +42,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# AWS CLI installation artifacts
+aws/
+awscliv2.zip
+
+# Terraform local files
+.terraform.lock.hcl.backup
+
+# Local Terraform state backups
+**/backups/
+
+# Kubernetes credentials
+/kubeconfig
