@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: raincheck
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/DiabloGitHubX/Raincheck.git
+    targetRevision: main
+    path: helm/raincheck
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: raincheck
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
