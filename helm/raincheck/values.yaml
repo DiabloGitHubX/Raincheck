@@ -55,3 +55,39 @@ backend:
     limits:
       cpu: 500m
       memory: 512Mi
+
+# RabbitMQ configuration
+rabbitmq:
+  enabled: true
+
+  replicaCount: 1
+
+  image:
+    repository: rabbitmq
+    tag: "3.13-management"
+    pullPolicy: IfNotPresent
+
+  service:
+    amqpPort: 5672
+    managementPort: 15672
+
+  auth:
+    existingSecret: raincheck-rabbitmq
+    usernameKey: username
+    passwordKey: password
+
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: local-path
+
+  nodeSelector:
+    workload: raincheck
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
