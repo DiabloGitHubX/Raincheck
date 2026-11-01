@@ -9,7 +9,7 @@ frontend:
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-frontend
-    tag: "287a813"
+    tag: "1dcb416"
     pullPolicy: IfNotPresent
 
   containerPort: 80
@@ -36,7 +36,7 @@ backend:
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-backend
-    tag: "287a813"
+    tag: "1dcb416"
     pullPolicy: IfNotPresent
 
   containerPort: 8000
