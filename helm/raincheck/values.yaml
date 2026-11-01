@@ -1,0 +1,51 @@
+# Global application settings
+nameOverride: ""
+fullnameOverride: ""
+
+# Frontend configuration
+frontend:
+  replicaCount: 2
+
+  image:
+    registry: ghcr.io
+    repository: diablogithubx/raincheck-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  containerPort: 80
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Backend configuration
+backend:
+  replicaCount: 1
+
+  image:
+    registry: ghcr.io
+    repository: diablogithubx/raincheck-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  containerPort: 8000
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

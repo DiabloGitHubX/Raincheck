@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "raincheck.fullname" . }}-frontend
+  labels:
+    app.kubernetes.io/name: {{ include "raincheck.name" . }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "raincheck.name" . }}
+    app.kubernetes.io/component: frontend
