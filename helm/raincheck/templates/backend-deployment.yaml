@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,6 +29,22 @@ spec:
             - name: http
               containerPort: {{ .Values.backend.containerPort }}
               protocol: TCP
+
+          env:
+            - name: RABBITMQ_HOST
+              value: "{{ include "raincheck.fullname" . }}-rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rabbitmq.auth.existingSecret }}
+                  key: {{ .Values.rabbitmq.auth.usernameKey }}
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rabbitmq.auth.existingSecret }}
+                  key: {{ .Values.rabbitmq.auth.passwordKey }}
 
           readinessProbe:
             httpGet:
