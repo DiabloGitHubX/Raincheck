@@ -5,22 +5,17 @@ fullnameOverride: ""
 # Frontend configuration
 frontend:
   replicaCount: 2
-
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-frontend
     tag: "1dcb416"
     pullPolicy: IfNotPresent
-
   containerPort: 80
-
   service:
     type: ClusterIP
     port: 80
-
   nodeSelector:
     workload: raincheck
-
   resources:
     requests:
       cpu: 100m
@@ -32,22 +27,34 @@ frontend:
 # Backend configuration
 backend:
   replicaCount: 1
-
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-backend
     tag: "1dcb416"
     pullPolicy: IfNotPresent
-
   containerPort: 8000
-
   service:
     type: ClusterIP
     port: 8000
-
   nodeSelector:
     workload: raincheck
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
+# Worker configuration
+worker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/diablogithubx/raincheck-worker
+    tag: "latest"
+    pullPolicy: Always
+  nodeSelector:
+    workload: raincheck
   resources:
     requests:
       cpu: 100m
@@ -59,31 +66,24 @@ backend:
 # RabbitMQ configuration
 rabbitmq:
   enabled: true
-
   replicaCount: 1
-
   image:
     repository: rabbitmq
     tag: "3.13-management"
     pullPolicy: IfNotPresent
-
   service:
     amqpPort: 5672
     managementPort: 15672
-
   auth:
     existingSecret: raincheck-rabbitmq
     usernameKey: username
     passwordKey: password
-
   persistence:
     enabled: true
     size: 2Gi
     storageClass: local-path
-
   nodeSelector:
     workload: raincheck
-
   resources:
     requests:
       cpu: 100m

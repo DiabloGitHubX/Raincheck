@@ -1,4 +1,3 @@
-
 name: Build and Push Raincheck Images
 
 on:
@@ -55,6 +54,13 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.vars.outputs.IMAGE_TAG }}
 
+      - name: Build and push worker
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/worker
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ steps.vars.outputs.IMAGE_TAG }}
+
       - name: Update Helm image tags
         env:
           IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
@@ -74,26 +80,26 @@ jobs:
               if line and not line[0].isspace() and line.rstrip().endswith(":"):
                   section = line.rstrip()[:-1]
 
-              if section in {"frontend", "backend"} and re.match(r"^\s+tag:", line):
+              if section in {"frontend", "backend", "worker"} and re.match(r"^\s+tag:", line):
                   indent = line[:len(line) - len(line.lstrip())]
                   lines[index] = f'{indent}tag: "{os.environ["IMAGE_TAG"]}"\n'
                   updated.add(section)
 
-          if updated != {"frontend", "backend"}:
+          expected = {"frontend", "backend", "worker"}
+          if updated != expected:
               raise RuntimeError(
-                  f"Expected to update frontend and backend, updated: {updated}"
+                  f"Expected to update {expected}, updated: {updated}"
               )
 
           path.write_text("".join(lines))
-          print(f"Updated frontend and backend image tags to {os.environ['IMAGE_TAG']}")
+          print(f"Updated all three image tags to {os.environ['IMAGE_TAG']}")
           PY
 
       - name: Verify Helm image tags
         env:
           IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
         run: |
-          grep -q "tag: \"$IMAGE_TAG\"" helm/raincheck/values.yaml
-          test "$(grep -c "tag: \"$IMAGE_TAG\"" helm/raincheck/values.yaml)" -eq 2
+          test "$(grep -c "tag: \"$IMAGE_TAG\"" helm/raincheck/values.yaml)" -eq 3
           grep -n -A 4 "image:" helm/raincheck/values.yaml
 
       - name: Commit and push Helm image updates
