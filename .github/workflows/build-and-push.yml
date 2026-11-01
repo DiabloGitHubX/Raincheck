@@ -56,13 +56,45 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.vars.outputs.IMAGE_TAG }}
 
       - name: Update Helm image tags
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
         run: |
-          sed -i -E "s/(tag: \")[^\"]+/\1${{ steps.vars.outputs.IMAGE_TAG }}/" helm/raincheck/values.yaml
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("helm/raincheck/values.yaml")
+          lines = path.read_text().splitlines(keepends=True)
+
+          updated = set()
+          section = None
+
+          for index, line in enumerate(lines):
+              if line and not line[0].isspace() and line.rstrip().endswith(":"):
+                  section = line.rstrip()[:-1]
+
+              if section in {"frontend", "backend"} and re.match(r"^\s+tag:", line):
+                  indent = line[:len(line) - len(line.lstrip())]
+                  lines[index] = f'{indent}tag: "{os.environ["IMAGE_TAG"]}"\n'
+                  updated.add(section)
+
+          if updated != {"frontend", "backend"}:
+              raise RuntimeError(
+                  f"Expected to update frontend and backend, updated: {updated}"
+              )
+
+          path.write_text("".join(lines))
+          print(f"Updated frontend and backend image tags to {os.environ['IMAGE_TAG']}")
+          PY
 
       - name: Verify Helm image tags
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
         run: |
-          grep -q "tag: \"${{ steps.vars.outputs.IMAGE_TAG }}\"" helm/raincheck/values.yaml
-          test "$(grep -c "tag: \"${{ steps.vars.outputs.IMAGE_TAG }}\"" helm/raincheck/values.yaml)" -eq 2
+          grep -q "tag: \"$IMAGE_TAG\"" helm/raincheck/values.yaml
+          test "$(grep -c "tag: \"$IMAGE_TAG\"" helm/raincheck/values.yaml)" -eq 2
+          grep -n -A 4 "image:" helm/raincheck/values.yaml
 
       - name: Commit and push Helm image updates
         run: |
