@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,5 +42,11 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.rabbitmq.auth.existingSecret }}
                   key: {{ .Values.rabbitmq.auth.passwordKey }}
+            - name: REDIS_HOST
+              value: "{{ include "raincheck.fullname" . }}-redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_TTL
+              value: "3600"
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

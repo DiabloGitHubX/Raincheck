@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raincheck Dashboard</title>
+    <title>Raincheck | Weather Dashboard</title>
+
     <style>
         * {
             box-sizing: border-box;
@@ -13,65 +15,340 @@
             margin: 0;
             min-height: 100vh;
             font-family: Arial, sans-serif;
-            background: #eef4f8;
+            background: linear-gradient(135deg, #e0f2fe, #f8fafc);
             color: #243447;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 24px;
         }
 
         .dashboard {
-            width: 90%;
-            max-width: 650px;
+            width: 100%;
+            max-width: 620px;
             padding: 40px;
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-            text-align: center;
+            border-radius: 20px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
         }
 
         h1 {
-            margin-bottom: 10px;
+            margin: 0;
             color: #176b87;
+            font-size: 34px;
         }
 
         .subtitle {
             color: #64748b;
-            margin-bottom: 30px;
+            margin: 10px 0 30px;
         }
 
-        .status {
-            padding: 18px;
-            background: #e8f7ee;
+        .search-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid #cbd5e1;
             border-radius: 10px;
-            color: #18794e;
+            font-size: 16px;
         }
 
-        .status strong {
+        button {
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            background: #176b87;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #12566d;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 20px;
+            color: #64748b;
+            text-align: center;
+            min-height: 22px;
+        }
+
+        .weather-card {
+            display: none;
+            margin-top: 25px;
+            padding: 25px;
+            background: #f0f9ff;
+            border-radius: 14px;
+        }
+
+        .weather-card h2 {
+            margin: 0 0 8px;
+            color: #176b87;
+        }
+
+        .temperature {
+            font-size: 52px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+
+        .weather-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .weather-item {
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .weather-item span {
             display: block;
+            color: #64748b;
+            font-size: 13px;
             margin-bottom: 6px;
+        }
+
+        .weather-item strong {
+            font-size: 18px;
         }
 
         footer {
             margin-top: 30px;
+            text-align: center;
             color: #94a3b8;
-            font-size: 13px;
+            font-size: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .dashboard {
+                padding: 25px;
+            }
+
+            .search-form {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
         }
     </style>
 </head>
+
 <body>
     <main class="dashboard">
         <h1>Raincheck ☁️</h1>
-        <p class="subtitle">Your minimal weather infrastructure dashboard</p>
+        <p class="subtitle">
+            Search for a city to get its current weather.
+        </p>
 
-        <section class="status">
-            <strong>Frontend Status: Online</strong>
-            The Raincheck dashboard is running successfully.
+        <form id="weather-form" class="search-form">
+            <input
+                type="text"
+                id="city"
+                placeholder="Enter a city, e.g. Tel Aviv"
+                minlength="2"
+                maxlength="100"
+                required
+            >
+            <button type="submit" id="search-button">
+                Get Weather
+            </button>
+        </form>
+
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+
+        <section id="weather-card" class="weather-card">
+            <h2 id="location"></h2>
+            <div id="temperature" class="temperature"></div>
+            <p id="condition"></p>
+
+            <div class="weather-grid">
+                <div class="weather-item">
+                    <span>Feels like</span>
+                    <strong id="feels-like"></strong>
+                </div>
+
+                <div class="weather-item">
+                    <span>Humidity</span>
+                    <strong id="humidity"></strong>
+                </div>
+
+                <div class="weather-item">
+                    <span>Wind speed</span>
+                    <strong id="wind"></strong>
+                </div>
+
+                <div class="weather-item">
+                    <span>Precipitation</span>
+                    <strong id="precipitation"></strong>
+                </div>
+            </div>
+
+            <footer id="updated"></footer>
         </section>
 
         <footer>
-            Powered by Nginx · Raincheck DevOps Project
+            Powered by Open-Meteo · Raincheck DevOps Project
         </footer>
     </main>
+
+    <script>
+        const form = document.getElementById("weather-form");
+        const cityInput = document.getElementById("city");
+        const searchButton = document.getElementById("search-button");
+        const message = document.getElementById("message");
+        const weatherCard = document.getElementById("weather-card");
+
+        const weatherDescriptions = {
+            0: "Clear sky",
+            1: "Mainly clear",
+            2: "Partly cloudy",
+            3: "Overcast",
+            45: "Fog",
+            48: "Depositing rime fog",
+            51: "Light drizzle",
+            53: "Moderate drizzle",
+            55: "Dense drizzle",
+            61: "Slight rain",
+            63: "Moderate rain",
+            65: "Heavy rain",
+            71: "Slight snowfall",
+            73: "Moderate snowfall",
+            75: "Heavy snowfall",
+            80: "Rain showers",
+            81: "Moderate rain showers",
+            82: "Violent rain showers",
+            95: "Thunderstorm",
+            96: "Thunderstorm with hail",
+            99: "Thunderstorm with heavy hail"
+        };
+
+        function showMessage(text) {
+            message.textContent = text;
+        }
+
+        function displayWeather(result) {
+            const weather = result.weather;
+            const current = weather.current_weather;
+
+            document.getElementById("location").textContent =
+                `${weather.city}, ${weather.country || ""}`;
+
+            document.getElementById("temperature").textContent =
+                `${current.temperature_2m}°C`;
+
+            document.getElementById("condition").textContent =
+                weatherDescriptions[current.weather_code] || "Weather information";
+
+            document.getElementById("feels-like").textContent =
+                `${current.apparent_temperature}°C`;
+
+            document.getElementById("humidity").textContent =
+                `${current.relative_humidity_2m}%`;
+
+            document.getElementById("wind").textContent =
+                `${current.wind_speed_10m} km/h`;
+
+            document.getElementById("precipitation").textContent =
+                `${current.precipitation} mm`;
+
+            document.getElementById("updated").textContent =
+                `Weather data time: ${current.time}`;
+
+            weatherCard.style.display = "block";
+        }
+
+        async function pollForResult(requestId) {
+            const maxAttempts = 40;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const response = await fetch(
+                    `/api/weather/result/${encodeURIComponent(requestId)}`
+                );
+
+                if (!response.ok) {
+                    throw new Error("Could not retrieve the weather result.");
+                }
+
+                const result = await response.json();
+
+                if (result.status === "completed") {
+                    displayWeather(result);
+                    showMessage("Weather retrieved successfully!");
+                    return;
+                }
+
+                if (result.status === "failed") {
+                    throw new Error(result.error || "Weather request failed.");
+                }
+
+                showMessage(
+                    `Request ${result.status}... Please wait.`
+                );
+            }
+
+            throw new Error("The request timed out. Please try again.");
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const city = cityInput.value.trim();
+
+            if (city.length < 2) {
+                showMessage("Please enter a valid city name.");
+                return;
+            }
+
+            searchButton.disabled = true;
+            weatherCard.style.display = "none";
+            showMessage("Submitting your weather request...");
+
+            try {
+                const response = await fetch("/api/weather/request", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ city })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.detail || "Could not submit weather request."
+                    );
+                }
+
+                showMessage("Request queued. Waiting for the weather worker...");
+
+                await pollForResult(result.request_id);
+
+            } catch (error) {
+                showMessage(error.message);
+            } finally {
+                searchButton.disabled = false;
+            }
+        });
+    </script>
 </body>
 </html>

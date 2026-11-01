@@ -91,3 +91,23 @@ rabbitmq:
     limits:
       cpu: 500m
       memory: 512Mi
+
+# Redis configuration
+redis:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: redis
+    tag: "7.4-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  nodeSelector:
+    workload: raincheck
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
