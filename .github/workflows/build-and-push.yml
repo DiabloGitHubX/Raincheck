@@ -1,3 +1,4 @@
+
 name: Build and Push Raincheck Images
 
 on:
@@ -10,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -19,7 +20,7 @@ env:
 
 jobs:
   build-and-push:
-    name: Build and Push Docker Images
+    name: Build, Push and Update Helm
     runs-on: ubuntu-latest
 
     steps:
@@ -53,3 +54,26 @@ jobs:
           context: ./app/backend
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-backend:${{ steps.vars.outputs.IMAGE_TAG }}
+
+      - name: Update Helm image tags
+        run: |
+          sed -i -E "s/(tag: \")[^\"]+/\1${{ steps.vars.outputs.IMAGE_TAG }}/" helm/raincheck/values.yaml
+
+      - name: Verify Helm image tags
+        run: |
+          grep -q "tag: \"${{ steps.vars.outputs.IMAGE_TAG }}\"" helm/raincheck/values.yaml
+          test "$(grep -c "tag: \"${{ steps.vars.outputs.IMAGE_TAG }}\"" helm/raincheck/values.yaml)" -eq 2
+
+      - name: Commit and push Helm image updates
+        run: |
+          if git diff --quiet -- helm/raincheck/values.yaml; then
+            echo "Helm image tags are already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add helm/raincheck/values.yaml
+          git commit -m "chore: update Raincheck image tags to ${{ steps.vars.outputs.IMAGE_TAG }}"
+          git push origin HEAD:main
