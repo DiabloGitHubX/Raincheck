@@ -18,6 +18,9 @@ frontend:
     type: ClusterIP
     port: 80
 
+  nodeSelector:
+    workload: raincheck
+
   resources:
     requests:
       cpu: 100m
@@ -41,6 +44,9 @@ backend:
   service:
     type: ClusterIP
     port: 8000
+
+  nodeSelector:
+    workload: raincheck
 
   resources:
     requests:

@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/name: {{ include "raincheck.name" . }}
         app.kubernetes.io/component: frontend
     spec:
+      nodeSelector:
+        {{- toYaml .Values.frontend.nodeSelector | nindent 8 }}
       containers:
         - name: frontend
           image: "{{ .Values.frontend.image.registry }}/{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
