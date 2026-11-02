@@ -22,7 +22,7 @@ import main as worker
 @pytest.fixture
 def setup_worker(monkeypatch):
     channel = MagicMock()
-    channel.basic_publish.return_value = True
+    channel.basic_publish.return_value = None
 
     method = SimpleNamespace(delivery_tag=1)
     properties = pika.BasicProperties(headers={})
@@ -124,10 +124,37 @@ def test_retries_exhausted_goes_to_dlq(setup_worker, monkeypatch):
     client.close.assert_called_once()
 
 
+def test_successful_publish_returning_none_acknowledges_message(
+    setup_worker, monkeypatch
+):
+    channel, method, properties, client = setup_worker
+
+    # Pika BlockingChannel returns None after successful publication.
+    channel.basic_publish.return_value = None
+
+    def temporary_failure(city):
+        raise requests.Timeout("Simulated weather API timeout")
+
+    monkeypatch.setattr(worker, "get_weather", temporary_failure)
+
+    worker.process_message(
+        channel, method, properties, make_message()
+    )
+
+    channel.basic_publish.assert_called_once()
+    assert channel.basic_publish.call_args.kwargs["mandatory"] is True
+    assert (
+        channel.basic_publish.call_args.kwargs["routing_key"]
+        == worker.RETRY_QUEUE
+    )
+    channel.basic_ack.assert_called_once_with(delivery_tag=1)
+    client.close.assert_called_once()
+
+
 def test_publish_failure_does_not_ack(setup_worker, monkeypatch):
     channel, method, properties, client = setup_worker
 
-    channel.basic_publish.return_value = False
+    channel.basic_publish.side_effect = RuntimeError("Simulated RabbitMQ publish failure")
 
     def temporary_failure(city):
         raise requests.Timeout("Open-Meteo timeout")

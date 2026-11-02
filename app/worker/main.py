@@ -124,16 +124,15 @@ def publish_and_ack(
         message_id=properties.message_id,
     )
 
-    confirmed = channel.basic_publish(
+    # With Pika BlockingChannel publisher confirms enabled,
+    # basic_publish returns None on success and raises on failure.
+    channel.basic_publish(
         exchange=exchange,
         routing_key=routing_key,
         body=body,
         properties=outgoing_properties,
         mandatory=True,
     )
-
-    if confirmed is not True:
-        raise RuntimeError("RabbitMQ did not confirm publication")
 
     channel.basic_ack(delivery_tag=method.delivery_tag)
 
