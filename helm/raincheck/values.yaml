@@ -8,7 +8,7 @@ frontend:
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-frontend
-    tag: "a5207aa"
+    tag: "0153bc5"
     pullPolicy: IfNotPresent
   containerPort: 80
   service:
@@ -30,7 +30,7 @@ backend:
   image:
     registry: ghcr.io
     repository: diablogithubx/raincheck-backend
-    tag: "a5207aa"
+    tag: "0153bc5"
     pullPolicy: IfNotPresent
   containerPort: 8000
   service:
@@ -51,7 +51,7 @@ worker:
   replicaCount: 1
   image:
     repository: ghcr.io/diablogithubx/raincheck-worker
-    tag: "a5207aa"
+    tag: "0153bc5"
     pullPolicy: Always
   nodeSelector:
     workload: raincheck
