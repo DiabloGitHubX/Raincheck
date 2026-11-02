@@ -36,7 +36,8 @@ prometheus:
     replicas: 1
 
     nodeSelector:
-      kubernetes.io/hostname: ip-10-0-1-10
+      kubernetes.io/hostname: ip-10-0-1-12
+      workload: raincheck
 
     retention: 24h
 

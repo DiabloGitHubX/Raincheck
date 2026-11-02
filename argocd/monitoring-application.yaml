@@ -12,6 +12,7 @@ spec:
       chart: kube-prometheus-stack
       targetRevision: "92.17.0"
       helm:
+        skipCrds: true
         valueFiles:
           - $values/monitoring/values.yaml
 
@@ -32,5 +33,6 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - PruneLast=true
 
     

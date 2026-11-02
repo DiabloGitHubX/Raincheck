@@ -46,3 +46,17 @@
           Raincheck K3s cluster installation completed.
           Configure access using:
           export KUBECONFIG={{ playbook_dir }}/../../kubeconfig
+
+- name: Apply workload labels to Kubernetes nodes
+  hosts: k3s_master
+  become: true
+  tasks:
+    - name: Label Worker 1 for Argo CD workloads
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s kubectl label node ip-10-0-1-11 workload=argocd --overwrite
+      changed_when: true
+
+    - name: Label Worker 2 for Raincheck workloads
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s kubectl label node ip-10-0-1-12 workload=raincheck --overwrite
+      changed_when: true
