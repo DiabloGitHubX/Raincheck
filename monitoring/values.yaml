@@ -17,18 +17,14 @@ prometheusOperator:
       memory: 128Mi
 
   # ==================================================
-  # Admission Webhooks - ArgoCD Hook Lifecycle
+  # Admission Webhooks - Certificate Management
   # ==================================================
   admissionWebhooks:
     enabled: true
 
-    annotations:
-      argocd.argoproj.io/hook: PreSync
-      argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-
     patch:
       enabled: true
-      ttlSecondsAfterFinished: null
+      ttlSecondsAfterFinished: 300
 
 # ==================================================
 # Prometheus
