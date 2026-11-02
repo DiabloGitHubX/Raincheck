@@ -1,0 +1,20 @@
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "raincheck.fullname" . }}-rabbitmq-metrics
+  labels:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    monitoring: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rabbitmq
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: prometheus
+      port: {{ .Values.rabbitmq.service.prometheusPort }}
+      targetPort: prometheus
+      protocol: TCP
+{{- end }}

@@ -74,6 +74,7 @@ rabbitmq:
   service:
     amqpPort: 5672
     managementPort: 15672
+    prometheusPort: 15692
   auth:
     existingSecret: raincheck-rabbitmq
     usernameKey: username

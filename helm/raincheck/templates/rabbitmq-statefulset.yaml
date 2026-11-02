@@ -38,6 +38,9 @@ spec:
             - name: management
               containerPort: {{ .Values.rabbitmq.service.managementPort }}
               protocol: TCP
+            - name: prometheus
+              containerPort: {{ .Values.rabbitmq.service.prometheusPort }}
+              protocol: TCP
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
