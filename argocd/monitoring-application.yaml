@@ -1,8 +1,10 @@
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: monitoring
   namespace: argocd
+
 spec:
   project: default
 
@@ -25,11 +27,60 @@ spec:
     server: https://kubernetes.default.svc
     namespace: monitoring
 
-  syncPolicy:
+  # Ignore annotation-only differences on the seven affected rules.
+  # Alert expressions, labels, and other fields are still compared.
+  ignoreDifferences:
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-etcd
+      jsonPointers:
+        - /metadata/annotations
 
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-general.rules
+      jsonPointers:
+        - /metadata/annotations
+
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-k8s.rules.container-cpu-usage-second
+      jsonPointers:
+        - /metadata/annotations
+
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-k8s.rules.container-memory-cache
+      jsonPointers:
+        - /metadata/annotations
+
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-k8s.rules.container-memory-rss
+      jsonPointers:
+        - /metadata/annotations
+
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-k8s.rules.container-memory-working-s
+      jsonPointers:
+        - /metadata/annotations
+
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+      namespace: monitoring
+      name: monitoring-kube-prometheus-kube-apiserver-histogram.rules
+      jsonPointers:
+        - /metadata/annotations
+
+  syncPolicy:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
       - PruneLast=true
-
-    

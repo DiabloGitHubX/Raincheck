@@ -77,6 +77,11 @@ grafana:
   enabled: true
   replicas: 1
 
+  admin:
+    existingSecret: monitoring-grafana
+    userKey: admin-user
+    passwordKey: admin-password
+
   nodeSelector:
     kubernetes.io/hostname: ip-10-0-1-11
 
