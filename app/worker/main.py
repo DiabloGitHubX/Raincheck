@@ -7,6 +7,15 @@ import time
 import pika
 import redis
 import requests
+from rabbitmq_topology import (
+    DEAD_LETTER_EXCHANGE,
+    DEAD_LETTER_QUEUE,
+    MAIN_QUEUE,
+    MAX_RETRIES,
+    RETRY_EXCHANGE,
+    RETRY_QUEUE,
+    declare_topology,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,7 +32,9 @@ REDIS_HOST = os.getenv("REDIS_HOST", "raincheck-redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_TTL = int(os.getenv("REDIS_TTL", "3600"))
 
-QUEUE_NAME = "weather_tasks"
+
+class PermanentRequestError(Exception):
+    """A request that cannot succeed by retrying."""
 
 
 def get_redis_client():
@@ -37,8 +48,6 @@ def get_redis_client():
 
 
 def get_weather(city):
-    """Retrieve current weather for a city using Open-Meteo."""
-
     geocoding_response = requests.get(
         "https://geocoding-api.open-meteo.com/v1/search",
         params={
@@ -54,7 +63,7 @@ def get_weather(city):
     locations = geocoding_response.json().get("results", [])
 
     if not locations:
-        raise ValueError(f"City not found: {city}")
+        raise PermanentRequestError(f"City not found: {city}")
 
     location = locations[0]
 
@@ -80,110 +89,201 @@ def get_weather(city):
     }
 
 
+def save_status(client, request_id, city, status, **extra):
+    client.setex(
+        f"weather:{request_id}",
+        REDIS_TTL,
+        json.dumps({
+            "request_id": request_id,
+            "city": city,
+            "status": status,
+            **extra,
+        }),
+    )
+
+
+def publish_and_ack(
+    channel,
+    method,
+    properties,
+    body,
+    exchange,
+    routing_key,
+    retry_count,
+):
+    """ACK the original only after confirmed, routed publication."""
+
+    headers = dict(properties.headers or {})
+    headers["x-retry-count"] = retry_count
+
+    outgoing_properties = pika.BasicProperties(
+        content_type=properties.content_type or "application/json",
+        delivery_mode=2,
+        headers=headers,
+        correlation_id=properties.correlation_id,
+        message_id=properties.message_id,
+    )
+
+    confirmed = channel.basic_publish(
+        exchange=exchange,
+        routing_key=routing_key,
+        body=body,
+        properties=outgoing_properties,
+        mandatory=True,
+    )
+
+    if confirmed is not True:
+        raise RuntimeError("RabbitMQ did not confirm publication")
+
+    channel.basic_ack(delivery_tag=method.delivery_tag)
+
+
 def process_message(channel, method, properties, body):
-    redis_client = None
-    message = {}
+    client = None
+    request_id = None
+    city = None
 
     try:
-        message = json.loads(body)
+        headers = properties.headers or {}
+        retry_count = int(headers.get("x-retry-count", 0))
 
-        request_id = message["request_id"]
-        city = message["city"]
+        if retry_count < 0:
+            raise PermanentRequestError("Invalid retry count")
 
-        redis_client = get_redis_client()
+        try:
+            message = json.loads(body)
 
-        request_key = f"weather:{request_id}"
+            if not isinstance(message, dict):
+                raise PermanentRequestError("Message must be a JSON object")
 
-        redis_client.setex(
-            request_key,
-            REDIS_TTL,
-            json.dumps({
-                "request_id": request_id,
-                "city": city,
-                "status": "processing",
-            }),
-        )
+            request_id = message.get("request_id")
+            city = message.get("city")
+
+            if not isinstance(request_id, str) or not request_id:
+                raise PermanentRequestError("Invalid request_id")
+
+            if not isinstance(city, str) or not city.strip():
+                raise PermanentRequestError("Invalid city")
+
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise PermanentRequestError("Invalid JSON message") from error
+
+        client = get_redis_client()
+
+        save_status(client, request_id, city, "processing")
 
         logger.info(
-            "Processing weather request %s for %s",
+            "Processing request %s for %s (retry %s/%s)",
             request_id,
             city,
+            retry_count,
+            MAX_RETRIES,
         )
 
         weather = get_weather(city)
 
-        result = {
-            "request_id": request_id,
-            "city": city,
-            "status": "completed",
-            "weather": weather,
-        }
-
-        redis_client.setex(
-            request_key,
-            REDIS_TTL,
-            json.dumps(result),
-        )
-
-        logger.info(
-            "Weather request %s completed successfully",
+        save_status(
+            client,
             request_id,
+            city,
+            "completed",
+            weather=weather,
         )
 
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
-    except (requests.RequestException, ValueError, KeyError) as error:
-        logger.exception("Weather request failed")
+        logger.info("Request %s completed", request_id)
+        return
 
-        if redis_client:
+    except (PermanentRequestError, ValueError, TypeError) as error:
+        logger.warning("Permanent request failure: %s", error)
+
+        target_exchange = DEAD_LETTER_EXCHANGE
+        target_queue = DEAD_LETTER_QUEUE
+        next_retry_count = MAX_RETRIES
+
+        if request_id and city:
             try:
-                request_id = message.get("request_id", "unknown")
-                city = message.get("city", "unknown")
+                if client is None:
+                    client = get_redis_client()
 
-                redis_client.setex(
-                    f"weather:{request_id}",
-                    REDIS_TTL,
-                    json.dumps({
-                        "request_id": request_id,
-                        "city": city,
-                        "status": "failed",
-                        "error": str(error),
-                    }),
+                save_status(
+                    client,
+                    request_id,
+                    city,
+                    "failed",
+                    error=str(error),
                 )
-
-                channel.basic_ack(delivery_tag=method.delivery_tag)
-
             except redis.RedisError:
-                logger.exception("Could not save failed result to Redis")
-                channel.basic_nack(
-                    delivery_tag=method.delivery_tag,
-                    requeue=True,
-                )
-        else:
-            channel.basic_nack(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
+                logger.exception("Unable to save permanent failure status")
+
+    except Exception as error:
+        logger.exception("Worker processing failed")
+
+        if retry_count < MAX_RETRIES:
+            target_exchange = RETRY_EXCHANGE
+            target_queue = RETRY_QUEUE
+            next_retry_count = retry_count + 1
+
+            logger.warning(
+                "Scheduling retry %s/%s for request %s",
+                next_retry_count,
+                MAX_RETRIES,
+                request_id,
             )
 
-    except redis.RedisError:
-        logger.exception("Redis operation failed")
+        else:
+            target_exchange = DEAD_LETTER_EXCHANGE
+            target_queue = DEAD_LETTER_QUEUE
+            next_retry_count = retry_count
 
-        channel.basic_nack(
-            delivery_tag=method.delivery_tag,
-            requeue=True,
+            logger.error(
+                "Retries exhausted for request %s: %s",
+                request_id,
+                error,
+            )
+
+            if request_id and city:
+                try:
+                    if client is None:
+                        client = get_redis_client()
+
+                    save_status(
+                        client,
+                        request_id,
+                        city,
+                        "failed",
+                        error=f"Retries exhausted: {error}",
+                    )
+                except redis.RedisError:
+                    logger.exception("Unable to save final failure status")
+
+    finally:
+        if client is not None:
+            client.close()
+
+    try:
+        publish_and_ack(
+            channel=channel,
+            method=method,
+            properties=properties,
+            body=body,
+            exchange=target_exchange,
+            routing_key=target_queue,
+            retry_count=next_retry_count,
+        )
+
+        logger.info(
+            "Request %s routed to %s",
+            request_id,
+            target_queue,
         )
 
     except Exception:
-        logger.exception("Unexpected worker error")
-
-        channel.basic_nack(
-            delivery_tag=method.delivery_tag,
-            requeue=False,
+        logger.exception(
+            "RabbitMQ publication failed; original message not acknowledged"
         )
-
-    finally:
-        if redis_client:
-            redis_client.close()
+        raise
 
 
 def main():
@@ -202,25 +302,27 @@ def main():
     )
 
     while True:
+        connection = None
+
         try:
             logger.info("Connecting to RabbitMQ at %s", RABBITMQ_HOST)
 
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
 
-            channel.queue_declare(
-                queue=QUEUE_NAME,
-                durable=True,
-            )
+            declare_topology(channel)
+
+            # Required for publish_and_ack reliability.
+            channel.confirm_delivery()
 
             channel.basic_qos(prefetch_count=1)
 
             channel.basic_consume(
-                queue=QUEUE_NAME,
+                queue=MAIN_QUEUE,
                 on_message_callback=process_message,
             )
 
-            logger.info("Waiting for messages on queue: %s", QUEUE_NAME)
+            logger.info("Waiting for messages on queue: %s", MAIN_QUEUE)
 
             channel.start_consuming()
 
@@ -229,8 +331,14 @@ def main():
             break
 
         except Exception:
-            logger.exception("Worker connection failed; retrying in 5 seconds")
+            logger.exception(
+                "Worker connection or processing failed; retrying in 5 seconds"
+            )
             time.sleep(5)
+
+        finally:
+            if connection and connection.is_open:
+                connection.close()
 
 
 if __name__ == "__main__":
