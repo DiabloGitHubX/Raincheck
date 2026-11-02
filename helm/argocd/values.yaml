@@ -5,6 +5,13 @@ global:
   nodeSelector:
     workload: argocd
 
+# Reduce controller concurrency to limit memory spikes
+# during large application reconciliations.
+configs:
+  params:
+    controller.status.processors: "10"
+    controller.operation.processors: "5"
+
 controller:
   replicas: 1
   resources:
@@ -13,7 +20,7 @@ controller:
       memory: 256Mi
     limits:
       cpu: 300m
-      memory: 384Mi
+      memory: 512Mi
 
 server:
   replicas: 1
