@@ -1,4 +1,3 @@
-
 # ==================================================
 # Prometheus Operator
 # ==================================================
@@ -6,8 +5,7 @@ prometheusOperator:
   enabled: true
 
   nodeSelector:
-    kubernetes.io/os: linux
-    workload: raincheck
+    kubernetes.io/hostname: ip-10-0-1-10
 
   resources:
     requests:
@@ -27,12 +25,10 @@ prometheus:
     replicas: 1
 
     nodeSelector:
-      kubernetes.io/os: linux
-      workload: raincheck
+      kubernetes.io/hostname: ip-10-0-1-10
 
     retention: 24h
 
-    # Discover ServiceMonitors across all namespaces.
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
@@ -40,15 +36,14 @@ prometheus:
     resources:
       requests:
         cpu: 100m
-        memory: 128Mi
+        memory: 256Mi
       limits:
         cpu: 300m
-        memory: 256Mi
+        memory: 512Mi
 
     # Ephemeral storage; no PVC.
     storageSpec: {}
 
-  # RabbitMQ metrics discovery.
   additionalServiceMonitors:
     - name: rabbitmq
       namespaceSelector:
@@ -71,8 +66,7 @@ grafana:
   replicas: 1
 
   nodeSelector:
-    kubernetes.io/os: linux
-    workload: raincheck
+    kubernetes.io/hostname: ip-10-0-1-11
 
   resources:
     requests:
@@ -95,8 +89,7 @@ alertmanager:
     replicas: 1
 
     nodeSelector:
-      kubernetes.io/os: linux
-      workload: raincheck
+      kubernetes.io/hostname: ip-10-0-1-10
 
     resources:
       requests:
@@ -116,8 +109,7 @@ kubeStateMetrics:
 
 kube-state-metrics:
   nodeSelector:
-    kubernetes.io/os: linux
-    workload: raincheck
+    kubernetes.io/hostname: ip-10-0-1-10
 
   resources:
     requests:
@@ -142,12 +134,9 @@ nodeExporter:
       enabled: false
 
 prometheus-node-exporter:
-  # Run on all three Linux nodes.
-  # Do NOT add the Worker 2 workload selector here.
   nodeSelector:
     kubernetes.io/os: linux
 
-  # Allow scheduling on tainted nodes.
   tolerations:
     - effect: NoSchedule
       operator: Exists
