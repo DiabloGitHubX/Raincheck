@@ -9,8 +9,8 @@ global:
 # during large application reconciliations.
 configs:
   params:
-    controller.status.processors: "10"
-    controller.operation.processors: "5"
+    controller.status.processors: "3"
+    controller.operation.processors: "2"
 
 controller:
   replicas: 1
