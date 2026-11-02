@@ -1,0 +1,161 @@
+
+# ==================================================
+# Prometheus Operator
+# ==================================================
+prometheusOperator:
+  enabled: true
+
+  nodeSelector:
+    kubernetes.io/os: linux
+    workload: raincheck
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+# ==================================================
+# Prometheus
+# ==================================================
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    replicas: 1
+
+    nodeSelector:
+      kubernetes.io/os: linux
+      workload: raincheck
+
+    retention: 24h
+
+    # Discover ServiceMonitors across all namespaces.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 256Mi
+
+    # Ephemeral storage; no PVC.
+    storageSpec: {}
+
+  # RabbitMQ metrics discovery.
+  additionalServiceMonitors:
+    - name: rabbitmq
+      namespaceSelector:
+        matchNames:
+          - raincheck
+      selector:
+        matchLabels:
+          monitoring: prometheus
+      endpoints:
+        - port: prometheus
+          path: /metrics
+          interval: 30s
+          scheme: http
+
+# ==================================================
+# Grafana
+# ==================================================
+grafana:
+  enabled: true
+  replicas: 1
+
+  nodeSelector:
+    kubernetes.io/os: linux
+    workload: raincheck
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  persistence:
+    enabled: false
+
+# ==================================================
+# Alertmanager
+# ==================================================
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    replicas: 1
+
+    nodeSelector:
+      kubernetes.io/os: linux
+      workload: raincheck
+
+    resources:
+      requests:
+        cpu: 25m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 96Mi
+
+    storage: {}
+
+# ==================================================
+# kube-state-metrics
+# ==================================================
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  nodeSelector:
+    kubernetes.io/os: linux
+    workload: raincheck
+
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
+
+# ==================================================
+# Node Exporter
+# ==================================================
+nodeExporter:
+  enabled: true
+
+  operatingSystems:
+    linux:
+      enabled: true
+    aix:
+      enabled: false
+    darwin:
+      enabled: false
+
+prometheus-node-exporter:
+  # Run on all three Linux nodes.
+  # Do NOT add the Worker 2 workload selector here.
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  # Allow scheduling on tainted nodes.
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 24Mi
+    limits:
+      cpu: 50m
+      memory: 48Mi

@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+
+  sources:
+    # Prometheus Community Helm chart.
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "92.17.0"
+      helm:
+        valueFiles:
+          - $values/monitoring/values.yaml
+
+    # Raincheck repository containing our Helm values.
+    - repoURL: https://github.com/DiabloGitHubX/Raincheck.git
+      targetRevision: main
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=true
