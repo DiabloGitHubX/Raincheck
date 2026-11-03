@@ -1,101 +1,112 @@
-# Raincheck — reviewed configuration
+# Raincheck ☁️
 
-## Scope and safety
+**Cloud-native asynchronous weather dashboard | DevOps course capstone**
 
-This review covers the Terraform, Ansible, Argo CD, Helm, application, and CI configuration included in the supplied archive. It does **not** apply changes to AWS or the live Kubernetes cluster. No Terraform destroy/apply is required for the fixes in this review.
+Raincheck is a distributed weather application deployed on a three-node K3s cluster in AWS. A browser requests weather for a city; a FastAPI service queues the request in RabbitMQ, a Python worker fetches weather from the free [Open-Meteo](https://open-meteo.com/) API, and Redis stores the result for retrieval. A static Nginx frontend displays the response. The project demonstrates infrastructure as code, automated provisioning, container delivery, GitOps, reliability and observability.
 
-The archive contained a `kubeconfig` file. It is deliberately excluded from this reviewed package. Treat that file as a cluster-admin credential: do not commit or share it, keep local permissions at `0600`, and rotate/reissue cluster access credentials because the uploaded archive contained it.
+> **Project status:** Core system implemented; end-to-end processing, RabbitMQ reliability, CI/CD, Argo CD and monitoring were validated during development. Live availability is not guaranteed when EC2 instances are stopped to control costs.
 
-## Important configuration corrections
+## Architecture
 
-1. `argocd/monitoring-application.yaml` sets `helm.skipCrds: true`. The six Prometheus Operator CRDs already exist in the cluster; Argo CD should not attempt to re-apply them while they carry oversized client-side-apply annotations. This avoids deleting/recreating CRDs and preserves existing custom resources. CRD lifecycle/upgrades must be handled separately and deliberately.
-2. The monitoring Application keeps `ServerSideApply=true` and adds `PruneLast=true`. This does not itself repair an already-running stale operation; terminate that operation before starting a fresh sync.
-3. `monitoring/values.yaml` pins Prometheus to Worker 2 (`ip-10-0-1-12`) and its `workload=raincheck` label. This resolves the previously observed impossible combination that included the master hostname and the Raincheck workload label. Confirm the node labels before syncing.
-4. The monitoring values no longer add Argo CD hook annotations to the admission webhook resources. The admission Jobs retain their chart-managed lifecycle and 300-second TTL.
-5. `argocd/raincheck-application.yaml` adds `RespectIgnoreDifferences=true` so the declared StatefulSet PVC-template ignore rule is respected during sync; pruning is deferred to the end. RabbitMQ's StatefulSet already has `Prune=false,Delete=false` and PVC retention settings.
-6. Ansible now applies the two workload labels after K3s workers join: Worker 1 gets `workload=argocd`; Worker 2 gets `workload=raincheck`.
-7. `/kubeconfig` is explicitly ignored by Git.
+See [architecture and request flow](docs/architecture.md).
 
-## Apply the repository changes
-
-From the repository root, inspect and commit the changed files:
-
-```bash
-git diff --check
-git diff -- argocd/monitoring-application.yaml argocd/raincheck-application.yaml monitoring/values.yaml ansible/playbooks/install-k3s.yml .gitignore README.md
+```mermaid
+flowchart TD
+  U[Browser] --> F[Nginx frontend]
+  F --> B[FastAPI backend]
+  B -->|publish durable task| Q[(RabbitMQ)]
+  B -->|initial request state| R[(Redis)]
+  Q --> W[Python worker]
+  W -->|geocoding and forecast| O[Open-Meteo API]
+  W -->|result or failure state| R
+  F -->|poll request ID| B
+  B -->|read result| R
+  P[Prometheus] -->|scrape| K[K3s workloads and nodes]
+  G[Grafana] --> P
+  A[Argo CD] -->|reconcile Helm| K
 ```
 
-After reviewing the diff, commit and push it. Do not include `kubeconfig`, `.tfstate`, `.tfvars`, private keys, or secret values.
+## Technology stack
 
-## Safe cluster rollout (after the commit)
+| Layer | Implementation |
+| --- | --- |
+| Cloud | AWS EC2, VPC, subnet, security groups, encrypted EBS; `eu-north-1` |
+| Infrastructure as code | Terraform, S3 remote state with native locking |
+| Configuration management | Ansible, three-node K3s cluster |
+| Application | Nginx/HTML/JavaScript frontend, Python FastAPI backend, Python worker |
+| Messaging and cache | RabbitMQ (main/retry/DLQ), Redis with expiring results |
+| Images | Docker, GitHub Container Registry (GHCR) |
+| CI/CD | GitHub Actions, Ruff, pytest, pip-audit, Trivy, image SHA tags |
+| Kubernetes deployment | Helm chart, Argo CD automated reconciliation |
+| Observability | kube-prometheus-stack, Prometheus, Grafana |
 
-1. Confirm nodes and labels:
+## Repository guide
 
-```bash
-kubectl get nodes -o wide
-kubectl get nodes --show-labels
-```
+- `app/frontend`, `app/backend`, `app/worker` — application and worker unit tests
+- `terraform/` — cloud infrastructure; `terraform/bootstrap/` — remote-state bootstrap
+- `ansible/` — K3s installation and node configuration
+- `inventory/` and `scripts/update-inventory.sh` — generated Ansible host inventory
+- `helm/raincheck/` and `helm/argocd/` — application and Argo CD Helm configuration
+- `argocd/` — Raincheck and monitoring Application definitions
+- `monitoring/` — Prometheus/Grafana Helm values
+- `docs/` — architecture, validation and operations notes
 
-Worker 2 must have `kubernetes.io/hostname=ip-10-0-1-12` and `workload=raincheck`. If it does not, fix the label with the Ansible playbook or `kubectl label node ip-10-0-1-12 workload=raincheck --overwrite`.
+## Request lifecycle
 
-2. Apply the updated Application definition so the live Application receives `skipCrds` and sync options:
+1. A user enters a city in the web dashboard.
+2. The backend creates a request ID, writes an initial status to Redis and publishes a persistent message to RabbitMQ.
+3. The worker consumes the message and queries Open-Meteo.
+4. The worker stores the result in Redis; the browser polls the backend using the request ID.
+5. Failed jobs can be retried through a retry queue and eventually routed to a dead-letter queue for inspection.
 
-```bash
-kubectl apply -f argocd/monitoring-application.yaml
-```
+## CI/CD and GitOps
 
-3. Check the current operation. Only if its phase is `Running`, terminate it using the Argo CD CLI (not a made-up `operation.terminate` field):
+Changes to application code or the workflow trigger GitHub Actions checks and image builds. The pipeline runs worker lint/tests/dependency auditing, builds three container images, scans them with Trivy, and on eligible `main` runs pushes SHA-tagged images to GHCR. It updates image tags in `helm/raincheck/values.yaml`; Argo CD reconciles the declared Kubernetes state. The workflow can also be triggered manually. Documentation-only commits do not trigger the image pipeline automatically.
 
-```bash
-kubectl get application monitoring -n argocd -o jsonpath='Phase: {.status.operationState.phase}{"\n"}'
-# Run this only when the phase above is Running:
-argocd app terminate-op monitoring
-```
+## Deployment overview
 
-If the CLI is not logged in, port-forward `argocd-server` and log in first. If the phase is `Failed` or `Succeeded`, do not run the terminate command.
+**Prerequisites:** AWS credentials with appropriate permissions, AWS CLI, Terraform, Ansible, Python, kubectl, Helm, and SSH access to the EC2 instances. Running this project on AWS incurs charges; do not assume free-tier eligibility.
 
-4. Request a hard refresh and inspect the rendered application before syncing:
+1. Review the Terraform variables, IAM permissions, region, remote-state bootstrap and security-group access rules. Never commit `.tfvars`, state files or credentials.
+2. Initialize and review Terraform: `cd terraform && terraform init && terraform plan`. Apply **only after reviewing** the plan and expected AWS charges.
+3. Once instances are running, generate inventory from AWS: `./scripts/update-inventory.sh` (from the repository root). Ensure the intended AWS profile and region are selected.
+4. Install or verify K3s using `ansible/playbooks/install-k3s.yml` with the generated inventory. Check the playbook and Ansible configuration for the required command and SSH key before running it.
+5. Use the SSH tunnel and private kubeconfig generated by Ansible for cluster access; the Kubernetes API is not intended to be exposed publicly.
+6. Provision required Kubernetes Secrets securely outside Git, including `raincheck-rabbitmq` in namespace `raincheck` and the monitoring credentials. Follow the operational notes for any manual prerequisites.
+7. Install/configure Argo CD, apply `argocd/raincheck-application.yaml` and `argocd/monitoring-application.yaml`, and verify synchronization. Prometheus Operator CRDs require deliberate lifecycle management; the monitoring Application uses `skipCrds`.
+8. Verify pods, services, queue processing, Redis results and Prometheus targets. See [validation checklist](docs/validation.md).
 
-```bash
-kubectl annotate application monitoring -n argocd argocd.argoproj.io/refresh=hard --overwrite
-kubectl get application monitoring -n argocd -o jsonpath='Sync: {.status.sync.status}{"\n"}Health: {.status.health.status}{"\n"}Operation: {.status.operationState.phase}{"\n"}Message: {.status.operationState.message}{"\n"}'
-```
+**Important:** This is a deployment overview, not a claim of a tested zero-touch rebuild. Avoid running `terraform destroy` or applying an unexpected instance replacement: RabbitMQ's local-path persistent volume resides on Worker 2's disk.
 
-5. Start one sync (CLI):
+## Access and operations
 
-```bash
-argocd app sync monitoring
-argocd app wait monitoring --sync --health --timeout 600
-```
-
-6. Verify the CRDs were not part of the sync result and check the workloads:
-
-```bash
-kubectl get crd | grep monitoring.coreos.com
-kubectl get pods -n monitoring -o wide
-kubectl get application monitoring -n argocd
-```
-
-Do not delete or recreate the Prometheus Operator CRDs to work around annotation-size errors. Existing CRDs contain custom resource definitions used by Prometheus and Alertmanager.
-
-## Terraform findings
-
-The Terraform configuration uses an S3 backend with native state locking, encrypted/versioned state bucket bootstrap, private intra-cluster security-group traffic, and IMDSv2. The EC2 instances use `delete_on_termination=true` for root EBS volumes. Because the local-path RabbitMQ PVC lives on Worker 2's disk, replacing that EC2 instance can destroy RabbitMQ data. Do not run `terraform apply` as a Kubernetes troubleshooting step. Review any proposed EC2 replacement in a saved plan and protect/backup RabbitMQ data first.
-
-The supplied Ansible inventory contains public DNS names that may be stale. Refresh them from the current Terraform outputs before running Ansible:
+The frontend and backend Kubernetes Services use `ClusterIP`, not a public load balancer. For a local demo, a port-forward can expose the frontend temporarily:
 
 ```bash
-cd terraform
-terraform output master_public_ip
-terraform output worker1_public_ip
-terraform output worker2_public_ip
+kubectl -n raincheck get services
+kubectl -n raincheck port-forward svc/raincheck-frontend 8080:80
+# Open http://localhost:8080
 ```
 
-Update `inventory/hosts.ini` with the current public DNS/IP values (or use a generated dynamic inventory) before running the playbook. The archive did not include Terraform state or `*.tfvars`, so the current AWS resource mapping and variable values could not be independently verified.
+Cluster access requires the existing secure SSH tunnel and kubeconfig. Public IPs can change when EC2 instances are stopped and restarted; refresh the generated inventory afterward. Never publish admin credentials, kubeconfig files, SSH keys, or raw Secret values.
 
-## Remaining operational caveats
+## Reliability and limitations
 
-- The app chart expects the `raincheck-rabbitmq` Kubernetes Secret to exist in namespace `raincheck`; secret contents are intentionally not stored in Git.
-- The frontend and backend Services are `ClusterIP`; external access requires the existing ingress/load-balancer setup or a port-forward. No ingress resource is included in this archive.
-- Redis is configured without persistence; cached weather results are ephemeral.
-- `inventory/hosts.ini` must be refreshed before rerunning Ansible.
+- RabbitMQ includes main, retry and dead-letter queues; worker unit tests and live queue processing were exercised during development.
+- Redis is ephemeral and stores weather results with a TTL; it is not a durable database.
+- RabbitMQ's local-path persistent volume is tied to a node; replacing Worker 2 can lose broker data. A production deployment would use resilient storage and backup/recovery procedures.
+- `/health` on the backend is a basic liveness endpoint, not a dependency-aware readiness check.
+- Argo CD reconciliation is automated; the Raincheck Application intentionally does not enable global pruning. Verify actual sync settings before changing them.
+- K3s version upgrades are deferred to future work rather than attempted immediately before submission.
+
+## Monitoring and evidence
+
+Prometheus and Grafana provide cluster/workload monitoring; RabbitMQ exposes metrics for queue visibility. During development, 22/22 Prometheus targets were reported healthy. Screenshots and proof of execution should be collected without exposing credentials or public IPs. Use [validation checklist](docs/validation.md) and add evidence under `docs/screenshots/`.
+
+## Security and cost
+
+Infrastructure uses restricted security groups, IMDSv2 and encrypted EBS. Terraform remote state is held in S3; SSH tunnel access is preferred over exposing Kubernetes port 6443. Secrets are not committed to source control. Three EC2 instances, EBS volumes, public IPv4 addresses and S3 resources may incur charges even when some compute resources are stopped. Check billing and resource state after demonstrations.
+
+## Reference and attribution
+
+Raincheck was developed as an independent course project informed by [SkyWatch](https://github.com/yfreifeld/skywatch) and its [assignment write-up](https://github.com/yfreifeld/skywatch/blob/main/ASSIGNMENT.md). Raincheck differs in its frontend/backend split, Redis-backed asynchronous result retrieval, messaging reliability controls, infrastructure security and CI/CD checks.
