@@ -1,0 +1,24 @@
+=== Raincheck Monitoring Evidence ===
+Tue Nov  3 10:49:28 UTC 2026
+
+=== Monitoring Pods ===
+NAME                                                     READY   STATUS    RESTARTS       AGE
+monitoring-prometheus-node-exporter-mf2t2                1/1     Running   2 (143m ago)   20h
+alertmanager-monitoring-kube-prometheus-alertmanager-0   2/2     Running   2 (143m ago)   15h
+monitoring-prometheus-node-exporter-b2jk7                1/1     Running   5 (143m ago)   20h
+monitoring-prometheus-node-exporter-kqkjq                1/1     Running   2 (143m ago)   20h
+monitoring-kube-state-metrics-6c444dbc65-mwmk6           1/1     Running   3 (143m ago)   16h
+monitoring-kube-prometheus-operator-5d78b75fd4-r2k2l     1/1     Running   3 (142m ago)   16h
+prometheus-monitoring-kube-prometheus-prometheus-0       2/2     Running   2 (143m ago)   14h
+monitoring-grafana-cbf58cc-chgmk                         3/3     Running   3 (143m ago)   13h
+
+=== Monitoring Services ===
+NAME                                      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
+alertmanager-operated                     ClusterIP   None            <none>        9093/TCP,9094/TCP,9094/UDP   17h
+prometheus-operated                       ClusterIP   None            <none>        9090/TCP                     17h
+monitoring-grafana                        ClusterIP   10.43.230.149   <none>        80/TCP                       20h
+monitoring-kube-prometheus-alertmanager   ClusterIP   10.43.36.86     <none>        9093/TCP,8080/TCP            20h
+monitoring-prometheus-node-exporter       ClusterIP   10.43.160.211   <none>        9100/TCP                     20h
+monitoring-kube-prometheus-prometheus     ClusterIP   10.43.27.172    <none>        9090/TCP,8080/TCP            20h
+monitoring-kube-prometheus-operator       ClusterIP   10.43.219.44    <none>        443/TCP                      20h
+monitoring-kube-state-metrics             ClusterIP   10.43.6.239     <none>        8080/TCP                     20h

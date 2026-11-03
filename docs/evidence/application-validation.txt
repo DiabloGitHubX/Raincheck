@@ -1,0 +1,23 @@
+=== Raincheck Application Validation ===
+Tue Nov  3 10:50:55 UTC 2026
+
+=== Manual End-to-End Test ===
+Frontend: http://localhost:8080 (via kubectl port-forward)
+Test city: Tel Aviv
+Result: PASS - Dashboard loaded and weather data returned
+
+=== Application Deployments ===
+NAME                 READY   UP-TO-DATE   AVAILABLE   AGE
+raincheck-worker     1/1     1            1           37h
+raincheck-redis      1/1     1            1           36h
+raincheck-backend    1/1     1            1           39h
+raincheck-frontend   2/2     2            2           39h
+
+=== Application Services ===
+NAME                          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)              AGE
+raincheck-frontend            ClusterIP   10.43.58.180    <none>        80/TCP               39h
+raincheck-backend             ClusterIP   10.43.174.211   <none>        8000/TCP             39h
+raincheck-rabbitmq-headless   ClusterIP   None            <none>        5672/TCP,15672/TCP   38h
+raincheck-rabbitmq            ClusterIP   10.43.73.94     <none>        5672/TCP,15672/TCP   38h
+raincheck-redis               ClusterIP   10.43.239.216   <none>        6379/TCP             36h
+raincheck-rabbitmq-metrics    ClusterIP   10.43.68.88     <none>        15692/TCP            21h

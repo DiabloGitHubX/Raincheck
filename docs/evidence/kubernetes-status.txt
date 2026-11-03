@@ -1,0 +1,22 @@
+=== Raincheck Kubernetes Evidence ===
+Tue Nov  3 10:48:39 UTC 2026
+
+=== Kubernetes Nodes ===
+NAME           STATUS   ROLES                  AGE   VERSION        INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION   CONTAINER-RUNTIME
+ip-10-0-1-10   Ready    control-plane,master   42h   v1.29.5+k3s1   10.0.1.10     <none>        Ubuntu 22.04.5 LTS   6.8.0-1066-aws   containerd://1.7.15-k3s1
+ip-10-0-1-12   Ready    <none>                 42h   v1.29.5+k3s1   10.0.1.12     <none>        Ubuntu 22.04.5 LTS   6.8.0-1066-aws   containerd://1.7.15-k3s1
+ip-10-0-1-11   Ready    <none>                 42h   v1.29.5+k3s1   10.0.1.11     <none>        Ubuntu 22.04.5 LTS   6.8.0-1066-aws   containerd://1.7.15-k3s1
+
+=== Raincheck Pods ===
+NAME                                  READY   STATUS    RESTARTS       AGE
+raincheck-worker-fbfc9fb88-dl4b4      1/1     Running   1 (142m ago)   12h
+raincheck-redis-7c84796cd9-44sc2      1/1     Running   1 (142m ago)   16h
+raincheck-backend-748d86dd6c-p2rzn    1/1     Running   1 (142m ago)   12h
+raincheck-rabbitmq-0                  1/1     Running   1 (142m ago)   15h
+raincheck-frontend-58969b8b64-66zgv   1/1     Running   2 (142m ago)   12h
+raincheck-frontend-58969b8b64-bw5hq   1/1     Running   2 (142m ago)   12h
+
+=== ArgoCD Applications ===
+NAME         SYNC STATUS   HEALTH STATUS
+raincheck    Synced        Healthy
+monitoring   Synced        Healthy
