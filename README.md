@@ -8,7 +8,7 @@ Raincheck is a distributed weather application deployed on a three-node K3s clus
 
 ## Architecture
 
-See [architecture and request flow](docs/architecture.md).
+See [architecture and request flow](docs/architecture.md) and the [editable Excalidraw architecture diagram](docs/Raincheck-Full-Architecture.excalidraw).
 
 ```mermaid
 flowchart TD
@@ -64,6 +64,8 @@ flowchart TD
 Changes to application code or the workflow trigger GitHub Actions checks and image builds. The pipeline runs worker lint/tests/dependency auditing, builds three container images, scans them with Trivy, and on eligible `main` runs pushes SHA-tagged images to GHCR. It updates image tags in `helm/raincheck/values.yaml`; Argo CD reconciles the declared Kubernetes state. The workflow can also be triggered manually. Documentation-only commits do not trigger the image pipeline automatically.
 
 ## Deployment overview
+
+For detailed infrastructure reconstruction, Kubernetes bootstrap, monitoring CRDs and recovery limitations, see the [rebuild and reproducibility runbook](docs/operations/rebuild.md).
 
 **Prerequisites:** AWS credentials with appropriate permissions, AWS CLI, Terraform, Ansible, Python, kubectl, Helm, and SSH access to the EC2 instances. Running this project on AWS incurs charges; do not assume free-tier eligibility.
 
