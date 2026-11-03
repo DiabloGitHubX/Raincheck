@@ -17,15 +17,6 @@ resource "aws_security_group" "raincheck" {
     cidr_blocks = [var.allowed_ssh_cidr]
   }
 
-  # Kubernetes API access from the administrator's public IP only.
-  ingress {
-    description = "Kubernetes API access"
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
   # Allow communication between members of the Raincheck cluster.
   ingress {
     description = "Internal cluster communication"

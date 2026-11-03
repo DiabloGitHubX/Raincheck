@@ -7,7 +7,7 @@ k3s_disable_components:
   - traefik
 
 # Kubeconfig permissions
-k3s_write_kubeconfig_mode: "644"
+k3s_write_kubeconfig_mode: "600"
 
 # Wait settings
 k3s_api_wait_timeout: 120

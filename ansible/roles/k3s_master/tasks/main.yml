@@ -18,6 +18,14 @@
     k3s_server_version.rc != 0 or
     k3s_version not in k3s_server_version.stdout
 
+- name: Ensure K3s kubeconfig has secure permissions
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/k3s.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    state: file
+
 - name: Wait for K3s API to accept connections
   ansible.builtin.wait_for:
     host: 127.0.0.1
@@ -37,10 +45,12 @@
   ansible.builtin.slurp:
     src: /var/lib/rancher/k3s/server/node-token
   register: k3s_token_raw
+  no_log: true
 
 - name: Set K3s token fact
   ansible.builtin.set_fact:
     k3s_token: "{{ k3s_token_raw.content | b64decode | trim }}"
+  no_log: true
 
 - name: Display master installation status
   ansible.builtin.debug:

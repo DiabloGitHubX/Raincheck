@@ -31,32 +31,109 @@
       ansible.builtin.slurp:
         src: /etc/rancher/k3s/k3s.yaml
       register: kubeconfig_raw
+      no_log: true
 
-    - name: Save kubeconfig locally
-      ansible.builtin.copy:
-        content: "{{ kubeconfig_raw.content | b64decode | replace('127.0.0.1', hostvars[inventory_hostname]['ansible_host']) }}"
-        dest: "{{ playbook_dir }}/../../kubeconfig"
-        mode: "0600"
+    - name: Ensure local Kubernetes configuration directory exists
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.kube"
+        state: directory
+        mode: "0700"
       delegate_to: localhost
       become: false
 
+    - name: Parse K3s kubeconfig
+      ansible.builtin.set_fact:
+        raincheck_kubeconfig_source: "{{ kubeconfig_raw.content | b64decode | from_yaml }}"
+      no_log: true
+
+    - name: Validate K3s kubeconfig structure
+      ansible.builtin.assert:
+        that:
+          - raincheck_kubeconfig_source is mapping
+          - raincheck_kubeconfig_source.clusters is defined
+          - raincheck_kubeconfig_source.clusters | length == 1
+          - raincheck_kubeconfig_source.clusters[0].cluster.server == 'https://127.0.0.1:6443'
+          - raincheck_kubeconfig_source.clusters[0].cluster['certificate-authority-data'] is defined
+        fail_msg: "Unexpected K3s kubeconfig structure. Refusing to overwrite local credentials."
+      no_log: true
+
+    - name: Build secure SSH tunnel kubeconfig
+      ansible.builtin.set_fact:
+        raincheck_kubeconfig_secure: >-
+          {{
+            raincheck_kubeconfig_source |
+            combine({
+              'clusters': [
+                raincheck_kubeconfig_source.clusters[0] |
+                combine({
+                  'cluster': raincheck_kubeconfig_source.clusters[0].cluster |
+                  combine({
+                    'server': 'https://127.0.0.1:16443',
+                    'tls-server-name': hostvars[inventory_hostname]['master_private_ip']
+                  })
+                })
+              ]
+            })
+          }}
+      no_log: true
+
+    - name: Save secure SSH tunnel kubeconfig locally
+      ansible.builtin.copy:
+        content: "{{ raincheck_kubeconfig_secure | to_nice_yaml(sort_keys=False) }}"
+        dest: "{{ lookup('env', 'HOME') }}/.kube/raincheck-config"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
     - name: Display cluster access instructions
       ansible.builtin.debug:
-        msg: |
-          Raincheck K3s cluster installation completed.
-          Configure access using:
-          export KUBECONFIG={{ playbook_dir }}/../../kubeconfig
+        msg:
+          - "Raincheck K3s cluster installation completed."
+          - "Secure kubeconfig: {{ lookup('env', 'HOME') }}/.kube/raincheck-config"
+          - "SSH tunnel: ssh -N -L 127.0.0.1:16443:{{ master_private_ip }}:6443 -i ~/.ssh/raincheck.pem ubuntu@{{ ansible_host }}"
+          - "Then run: export KUBECONFIG=$HOME/.kube/raincheck-config"
+          - "Verify access: kubectl get nodes"
+
+- name: Verify all K3s nodes are Ready
+  hosts: k3s_master
+  become: true
+  tasks:
+    - name: Wait for master and both workers to become Ready
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/k3s
+          - kubectl
+          - wait
+          - --for=condition=Ready
+          - node/ip-10-0-1-10
+          - node/ip-10-0-1-11
+          - node/ip-10-0-1-12
+          - --timeout=180s
+      changed_when: false
 
 - name: Apply workload labels to Kubernetes nodes
   hosts: k3s_master
   become: true
   tasks:
+    - name: Get Worker 1 workload label
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s kubectl get node ip-10-0-1-11 -o jsonpath={.metadata.labels.workload}
+      register: worker1_workload_label
+      changed_when: false
+
     - name: Label Worker 1 for Argo CD workloads
       ansible.builtin.command:
         cmd: /usr/local/bin/k3s kubectl label node ip-10-0-1-11 workload=argocd --overwrite
-      changed_when: true
+      when: worker1_workload_label.stdout != "argocd"
+
+    - name: Get Worker 2 workload label
+      ansible.builtin.command:
+        cmd: /usr/local/bin/k3s kubectl get node ip-10-0-1-12 -o jsonpath={.metadata.labels.workload}
+      register: worker2_workload_label
+      changed_when: false
 
     - name: Label Worker 2 for Raincheck workloads
       ansible.builtin.command:
         cmd: /usr/local/bin/k3s kubectl label node ip-10-0-1-12 workload=raincheck --overwrite
-      changed_when: true
+      when: worker2_workload_label.stdout != "raincheck"

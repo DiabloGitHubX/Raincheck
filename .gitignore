@@ -55,3 +55,9 @@ awscliv2.zip
 
 # Kubernetes credentials
 /kubeconfig
+
+# Generated Ansible inventory
+/inventory/hosts.ini
+
+# Terraform saved execution plans (may contain sensitive data)
+*.tfplan

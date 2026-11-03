@@ -1,0 +1,19 @@
+# Raincheck K3s cluster inventory template
+# Generate inventory/hosts.ini using scripts/update-inventory.sh.
+# Do not use these placeholder addresses for deployment.
+
+[k3s_master]
+master ansible_host=MASTER_PUBLIC_IP master_private_ip=10.0.1.10
+
+[k3s_workers]
+worker1 ansible_host=WORKER1_PUBLIC_IP
+worker2 ansible_host=WORKER2_PUBLIC_IP
+
+[k3s_cluster:children]
+k3s_master
+k3s_workers
+
+[k3s_cluster:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/raincheck.pem
+ansible_python_interpreter=/usr/bin/python3
